@@ -9,22 +9,24 @@ export default function OrderHistoryScreen({
   return (
     <div className="flex flex-col min-h-full bg-ctu-bg pb-12 select-none animate-fadeIn">
       {/* Header */}
-      <div className="bg-white px-4 py-4 border-b border-ctu-border flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onBackToCatalog}
-            className="p-1 rounded-full hover:bg-gray-100 text-ctu-dark"
-          >
-            <ArrowLeft size={18} />
-          </button>
-          <h2 className="text-xl font-black text-ctu-dark tracking-tight">Order History</h2>
+      <div className="bg-white border-b border-ctu-border">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onBackToCatalog}
+              className="p-2 rounded-xl hover:bg-gray-100 text-ctu-dark transition-colors"
+            >
+              <ArrowLeft size={20} />
+            </button>
+            <h2 className="text-2xl font-black text-ctu-dark tracking-tight">Order History</h2>
+          </div>
+          <span className="text-xs text-ctu-muted font-bold">
+            {orders.length} {orders.length === 1 ? 'order' : 'orders'}
+          </span>
         </div>
-        <span className="text-xs text-ctu-muted font-medium">
-          {orders.length} {orders.length === 1 ? 'order' : 'orders'}
-        </span>
       </div>
 
-      <div className="p-4 space-y-3">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full space-y-4">
         {orders.length === 0 ? (
           <div className="py-20 text-center text-ctu-muted">
             <PackageCheck size={40} className="mx-auto mb-2 text-gray-300" />

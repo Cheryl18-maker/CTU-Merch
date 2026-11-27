@@ -22,14 +22,16 @@ export default function RewardsScreen({
   return (
     <div className="flex flex-col min-h-full bg-ctu-bg pb-12 select-none animate-fadeIn">
       {/* Header */}
-      <div className="bg-white px-4 py-4 border-b border-ctu-border">
-        <h2 className="text-xl font-black text-ctu-dark tracking-tight">Balance & Rewards</h2>
-        <p className="text-xs text-ctu-muted mt-0.5">
-          Earn points with every purchase and redeem campus rewards.
-        </p>
+      <div className="bg-white border-b border-ctu-border">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-5">
+          <h2 className="text-2xl font-black text-ctu-dark tracking-tight">Balance & Rewards</h2>
+          <p className="text-xs sm:text-sm text-ctu-muted mt-0.5">
+            Earn points with every purchase and redeem campus rewards.
+          </p>
+        </div>
       </div>
 
-      <div className="p-4 space-y-4">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 w-full space-y-6">
         {/* Balance & Points Dual Card */}
         <div className="bg-gradient-to-br from-[#252525] to-[#161616] rounded-3xl p-5 text-white shadow-lg space-y-4 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-32 h-32 bg-ctu-orange/20 rounded-full blur-2xl pointer-events-none" />

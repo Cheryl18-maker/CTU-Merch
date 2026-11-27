@@ -21,13 +21,13 @@ import OrderHistoryScreen from './components/OrderHistoryScreen.jsx';
 import RewardsScreen from './components/RewardsScreen.jsx';
 import TopUpModal from './components/TopUpModal.jsx';
 import ReceiptModal from './components/ReceiptModal.jsx';
+import LoginModal from './components/LoginModal.jsx';
 
 import { 
   fetchSupabaseProducts, 
   fetchSupabaseUserProfile, 
   createSupabaseOrder, 
-  isSupabaseConfigured,
-  supabase 
+  isSupabaseConfigured 
 } from './supabase.js';
 
 // Default initial products matching Figma and backend
@@ -192,7 +192,8 @@ const INITIAL_USER = {
   department: "College of Computer, Information and Communications Technology",
   campus: "Main Campus",
   balance: 1250.00,
-  points: 450
+  points: 450,
+  isGuest: false
 };
 
 const INITIAL_ORDERS = [
@@ -278,12 +279,12 @@ export default function App() {
   // Modals & Active Flows
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [showTopUp, setShowTopUp] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
   const [showWalletConfirm, setShowWalletConfirm] = useState(false);
   const [showInsufficientBalance, setShowInsufficientBalance] = useState(false);
   const [insufficientData, setInsufficientData] = useState({ required: 0, current: 0 });
   const [selectedReceiptOrder, setSelectedReceiptOrder] = useState(null);
   const [lastCompletedOrder, setLastCompletedOrder] = useState(null);
-  const [dbSource, setDbSource] = useState('Local Store');
 
   // Load data: try Supabase first, then FastAPI proxy, then fallback
   useEffect(() => {
@@ -297,10 +298,9 @@ export default function App() {
           ]);
           if (sbProds.status === 'fulfilled' && sbProds.value && sbProds.value.length > 0) {
             setProducts(sbProds.value);
-            setDbSource('Supabase (aograbohxutnakmcnrgm)');
           }
           if (sbProfile.status === 'fulfilled' && sbProfile.value) {
-            setUser(sbProfile.value);
+            setUser((prev) => ({ ...prev, ...sbProfile.value }));
           }
         } catch (err) {
           console.warn('Supabase initialization fallback:', err);
@@ -319,13 +319,12 @@ export default function App() {
 
         if (prodRes.status === 'fulfilled' && prodRes.value && prodRes.value.length > 0) {
           setProducts(prodRes.value);
-          setDbSource('FastAPI + Local');
         }
         if (catRes.status === 'fulfilled' && catRes.value) {
           setCategories(catRes.value);
         }
         if (userRes.status === 'fulfilled' && userRes.value) {
-          setUser(userRes.value);
+          setUser((prev) => ({ ...prev, ...userRes.value }));
         }
         if (ordersRes.status === 'fulfilled' && ordersRes.value) {
           setOrders(ordersRes.value);
@@ -434,9 +433,31 @@ export default function App() {
     setUser((prev) => ({ ...prev, balance: prev.balance + amount }));
   };
 
+  // Login & Guest handling
+  const handleLogin = (loginInfo) => {
+    setUser((prev) => ({
+      ...prev,
+      id: loginInfo.id,
+      name: loginInfo.name,
+      role: loginInfo.role,
+      isGuest: false
+    }));
+  };
+
+  const handleContinueAsGuest = () => {
+    setUser((prev) => ({
+      ...prev,
+      isGuest: true
+    }));
+  };
+
   // Checkout flow
   const handleInitiatePayment = (paymentMethod) => {
     if (paymentMethod === 'Campus Student Wallet') {
+      if (user.isGuest) {
+        setShowLoginModal(true);
+        return;
+      }
       if (user.balance < cartTotal) {
         setInsufficientData({
           required: cartTotal,
@@ -571,185 +592,164 @@ export default function App() {
     setCurrentScreen('welcome');
     setSelectedProduct(null);
     setShowTopUp(false);
+    setShowLoginModal(false);
     setShowWalletConfirm(false);
     setShowInsufficientBalance(false);
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#111114] flex justify-center text-slate-800 font-sans selection:bg-ctu-orange selection:text-white">
+    <div className="min-h-screen w-full bg-ctu-bg text-slate-800 font-sans selection:bg-ctu-orange selection:text-white flex flex-col">
       
-      {/* Full Page McDonald's Kiosk Column (Tall, Not Wide) */}
-      <div className="w-full max-w-2xl min-h-screen bg-ctu-bg flex flex-col relative shadow-2xl border-x border-stone-800/60">
-        
-        {/* Top Kiosk Station Info Bar */}
-        <div className="bg-[#18181b] text-white px-4 py-2 flex items-center justify-between text-xs select-none border-b border-stone-800">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
-            <span className="font-extrabold text-[11px] text-orange-400 uppercase tracking-wider">
-              CTU Kiosk Terminal #01
-            </span>
-            <span className="text-gray-400 text-[10px] hidden sm:inline">
-              · Main Campus Ground Floor
-            </span>
-          </div>
+      {/* Global Kiosk Header (Store Navigation Figma 10:2626 & 10:2875) */}
+      <Header
+        currentScreen={currentScreen}
+        onNavigate={setCurrentScreen}
+        cartCount={cartCount}
+        cartTotal={cartTotal}
+        user={user}
+        onOpenTopUp={() => setShowTopUp(true)}
+        onOpenLogin={() => setShowLoginModal(true)}
+      />
 
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 text-gray-300 text-[11px]">
-              <Database size={12} className="text-amber-400" />
-              <span className="font-mono text-[10px] text-gray-400">
-                {isSupabaseConfigured ? "Supabase Connected" : "Supabase: aograbohxutnakmcnrgm"}
-              </span>
-            </div>
-
-            <button
-              onClick={handleResetKiosk}
-              className="p-1 rounded bg-stone-800 hover:bg-stone-700 text-gray-300 text-[10px] font-bold transition-all active:scale-95 flex items-center gap-1"
-              title="Reset Kiosk State"
-            >
-              <RotateCcw size={12} />
-              <span className="hidden xs:inline">Reset</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Global Kiosk Header */}
-        <Header
-          currentScreen={currentScreen}
-          onNavigate={setCurrentScreen}
-          cartCount={cartCount}
-          cartTotal={cartTotal}
-          user={user}
-          onOpenTopUp={() => setShowTopUp(true)}
-          onResetOrder={handleResetKiosk}
-        />
-
-        {/* Main Content Area */}
-        <div className="flex-1 overflow-y-auto relative bg-ctu-bg flex flex-col">
-          {currentScreen === 'welcome' && (
-            <WelcomeScreen
-              onStartShopping={() => setCurrentScreen('catalog')}
-              onNavigate={setCurrentScreen}
-              user={user}
-              onOpenTopUp={() => setShowTopUp(true)}
-            />
-          )}
-
-          {currentScreen === 'catalog' && (
-            <CatalogScreen
-              products={filteredProducts}
-              categories={categories}
-              selectedCategory={selectedCategory}
-              onSelectCategory={setSelectedCategory}
-              searchQuery={searchQuery}
-              onSearchChange={setSearchQuery}
-              onSelectProduct={setSelectedProduct}
-              onQuickAdd={handleQuickAdd}
-              cartCount={cartCount}
-              cartTotal={cartTotal}
-              onViewCart={() => setCurrentScreen('cart')}
-              onResetOrder={handleResetKiosk}
-            />
-          )}
-
-          {currentScreen === 'cart' && (
-            <CartScreen
-              cart={cart}
-              onUpdateQuantity={handleUpdateQuantity}
-              onRemoveItem={handleRemoveItem}
-              onClearCart={handleClearCart}
-              onProceedToCheckout={() => setCurrentScreen('checkout')}
-              onContinueShopping={() => setCurrentScreen('catalog')}
-            />
-          )}
-
-          {currentScreen === 'checkout' && (
-            <CheckoutScreen
-              cart={cart}
-              user={user}
-              onConfirmOrder={handleInitiatePayment}
-              onBackToCart={() => setCurrentScreen('cart')}
-              onOpenTopUp={() => setShowTopUp(true)}
-            />
-          )}
-
-          {currentScreen === 'success' && (
-            <OrderSuccessScreen
-              order={lastCompletedOrder || orders[0]}
-              onHome={() => setCurrentScreen('welcome')}
-              onViewReceipt={() => setSelectedReceiptOrder(lastCompletedOrder || orders[0])}
-            />
-          )}
-
-          {currentScreen === 'orders' && (
-            <OrderHistoryScreen
-              orders={orders}
-              onSelectOrder={(ord) => setSelectedReceiptOrder(ord)}
-              onBackToCatalog={() => setCurrentScreen('catalog')}
-            />
-          )}
-
-          {currentScreen === 'rewards' && (
-            <RewardsScreen
-              user={user}
-              rewards={rewards}
-              onRedeemReward={handleRedeemReward}
-              onOpenTopUp={() => setShowTopUp(true)}
-              onBackToCatalog={() => setCurrentScreen('catalog')}
-            />
-          )}
-        </div>
-
-        {/* Global Modals */}
-        {selectedProduct && (
-          <ProductDetailModal
-            product={selectedProduct}
-            onClose={() => setSelectedProduct(null)}
-            onAddToCart={handleAddToCart}
-          />
-        )}
-
-        {showTopUp && (
-          <TopUpModal
-            currentBalance={user.balance}
-            onTopUp={handleTopUp}
-            onClose={() => setShowTopUp(false)}
-          />
-        )}
-
-        {showWalletConfirm && (
-          <ConfirmWalletModal
+      {/* Main Content Area (Dynamic Responsive Width, Full Length) */}
+      <main className="flex-1 flex flex-col w-full">
+        {currentScreen === 'welcome' && (
+          <WelcomeScreen
+            onStartShopping={() => setCurrentScreen('catalog')}
+            onNavigate={setCurrentScreen}
             user={user}
-            totalAmount={cartTotal}
-            onConfirm={() => {
-              setShowWalletConfirm(false);
-              finalizeOrder('Campus Student Wallet');
-            }}
-            onClose={() => setShowWalletConfirm(false)}
+            onOpenTopUp={() => setShowTopUp(true)}
+            onOpenLogin={() => setShowLoginModal(true)}
           />
         )}
 
-        {showInsufficientBalance && (
-          <InsufficientBalanceModal
-            currentBalance={insufficientData.current}
-            requiredAmount={insufficientData.required}
-            onTopUp={() => {
-              setShowInsufficientBalance(false);
-              setShowTopUp(true);
-            }}
-            onSwitchPayment={() => {
-              setShowInsufficientBalance(false);
-            }}
-            onClose={() => setShowInsufficientBalance(false)}
+        {currentScreen === 'catalog' && (
+          <CatalogScreen
+            products={filteredProducts}
+            categories={categories}
+            selectedCategory={selectedCategory}
+            onSelectCategory={setSelectedCategory}
+            searchQuery={searchQuery}
+            onSearchChange={setSearchQuery}
+            onSelectProduct={setSelectedProduct}
+            onQuickAdd={handleQuickAdd}
+            cartCount={cartCount}
+            cartTotal={cartTotal}
+            onViewCart={() => setCurrentScreen('cart')}
+            onNavigateHome={() => setCurrentScreen('welcome')}
+            user={user}
+            onOpenLogin={() => setShowLoginModal(true)}
           />
         )}
 
-        {selectedReceiptOrder && (
-          <ReceiptModal
-            order={selectedReceiptOrder}
-            onClose={() => setSelectedReceiptOrder(null)}
+        {currentScreen === 'cart' && (
+          <CartScreen
+            cart={cart}
+            onUpdateQuantity={handleUpdateQuantity}
+            onRemoveItem={handleRemoveItem}
+            onClearCart={handleClearCart}
+            onProceedToCheckout={() => setCurrentScreen('checkout')}
+            onContinueShopping={() => setCurrentScreen('catalog')}
           />
         )}
-      </div>
+
+        {currentScreen === 'checkout' && (
+          <CheckoutScreen
+            cart={cart}
+            user={user}
+            onConfirmOrder={handleInitiatePayment}
+            onBackToCart={() => setCurrentScreen('cart')}
+            onOpenTopUp={() => setShowTopUp(true)}
+          />
+        )}
+
+        {currentScreen === 'success' && (
+          <OrderSuccessScreen
+            order={lastCompletedOrder || orders[0]}
+            onHome={() => setCurrentScreen('welcome')}
+            onViewReceipt={() => setSelectedReceiptOrder(lastCompletedOrder || orders[0])}
+          />
+        )}
+
+        {currentScreen === 'orders' && (
+          <OrderHistoryScreen
+            orders={orders}
+            onSelectOrder={(ord) => setSelectedReceiptOrder(ord)}
+            onBackToCatalog={() => setCurrentScreen('catalog')}
+          />
+        )}
+
+        {currentScreen === 'rewards' && (
+          <RewardsScreen
+            user={user}
+            rewards={rewards}
+            onRedeemReward={handleRedeemReward}
+            onOpenTopUp={() => setShowTopUp(true)}
+            onBackToCatalog={() => setCurrentScreen('catalog')}
+          />
+        )}
+      </main>
+
+      {/* Global Modals */}
+      {showLoginModal && (
+        <LoginModal
+          isOpen={showLoginModal}
+          onClose={() => setShowLoginModal(false)}
+          onLogin={handleLogin}
+          onContinueAsGuest={handleContinueAsGuest}
+          currentUser={user}
+        />
+      )}
+
+      {selectedProduct && (
+        <ProductDetailModal
+          product={selectedProduct}
+          onClose={() => setSelectedProduct(null)}
+          onAddToCart={handleAddToCart}
+        />
+      )}
+
+      {showTopUp && (
+        <TopUpModal
+          currentBalance={user.balance}
+          onTopUp={handleTopUp}
+          onClose={() => setShowTopUp(false)}
+        />
+      )}
+
+      {showWalletConfirm && (
+        <ConfirmWalletModal
+          user={user}
+          totalAmount={cartTotal}
+          onConfirm={() => {
+            setShowWalletConfirm(false);
+            finalizeOrder('Campus Student Wallet');
+          }}
+          onClose={() => setShowWalletConfirm(false)}
+        />
+      )}
+
+      {showInsufficientBalance && (
+        <InsufficientBalanceModal
+          currentBalance={insufficientData.current}
+          requiredAmount={insufficientData.required}
+          onTopUp={() => {
+            setShowInsufficientBalance(false);
+            setShowTopUp(true);
+          }}
+          onSwitchPayment={() => {
+            setShowInsufficientBalance(false);
+          }}
+          onClose={() => setShowInsufficientBalance(false)}
+        />
+      )}
+
+      {selectedReceiptOrder && (
+        <ReceiptModal
+          order={selectedReceiptOrder}
+          onClose={() => setSelectedReceiptOrder(null)}
+        />
+      )}
     </div>
   );
 }

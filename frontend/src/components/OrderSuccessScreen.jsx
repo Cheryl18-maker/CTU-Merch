@@ -36,7 +36,7 @@ export default function OrderSuccessScreen({
         </div>
       </div>
 
-      <div className="p-4 space-y-4">
+      <div className="max-w-2xl mx-auto px-4 py-6 w-full space-y-4">
         {/* QR Code & Pickup Pass */}
         <div className="bg-white rounded-3xl p-5 border border-ctu-border shadow-sm text-center space-y-4">
           <h2 className="font-extrabold text-sm text-ctu-dark">
