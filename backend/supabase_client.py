@@ -7,8 +7,8 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY", "")
 
 supabase_client: Optional[Client] = None
 
-if SUPABASE_KEY:
-    try:
+try:
+    if SUPABASE_KEY:
         supabase_client = create_client(SUPABASE_URL, SUPABASE_KEY)
-    except Exception as e:
-        print(f"Warning: Could not initialize Supabase client: {e}")
+except Exception as e:
+    print(f"Warning: Could not initialize Supabase client: {e}")

@@ -20,7 +20,7 @@ export async function fetchSupabaseProducts() {
       .select('*')
       .order('price', { ascending: true });
     if (error) {
-      console.warn('Supabase products query returned error:', error.message);
+      console.warn('Supabase products query note:', error.message);
       return null;
     }
     return data;
@@ -60,12 +60,29 @@ export async function createSupabaseOrder(orderData) {
       .select()
       .single();
     if (error) {
-      console.warn('Supabase insert order error:', error.message);
+      console.warn('Supabase insert order note:', error.message);
       return null;
     }
     return data;
   } catch (err) {
     console.warn('Supabase order creation error:', err);
+    return null;
+  }
+}
+
+/**
+ * Fetch rewards from Supabase
+ */
+export async function fetchSupabaseRewards() {
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('rewards')
+      .select('*')
+      .order('cost', { ascending: true });
+    if (error) return null;
+    return data;
+  } catch {
     return null;
   }
 }
