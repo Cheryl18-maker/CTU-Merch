@@ -5,6 +5,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+try:
+    from supabase_client import supabase_client
+except Exception:
+    supabase_client = None
+
 app = FastAPI(title="CTU Merch Kiosk API", version="1.0.0")
 
 # Enable CORS for local Vite development

@@ -112,28 +112,28 @@ export default function CartScreen({
         ))}
       </div>
 
-      {/* Fixed Checkout Bar */}
-      <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto p-4 bg-white border-t border-ctu-border shadow-2xl z-40">
+      {/* Fixed Checkout Bar (McDonald's Kiosk Style) */}
+      <div className="fixed bottom-0 left-0 right-0 max-w-2xl mx-auto p-4 bg-white border-t-2 border-ctu-border shadow-2xl z-40">
         <div className="flex justify-between items-center text-xs mb-3">
-          <span className="text-ctu-muted">Order Total:</span>
-          <span className="font-black text-xl text-ctu-dark">
+          <span className="text-ctu-muted font-bold uppercase tracking-wider text-[11px]">Total ({totalItems} items):</span>
+          <span className="font-black text-2xl text-ctu-dark">
             ₱{subtotal.toFixed(2)}
           </span>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-3">
           <button
             onClick={onContinueShopping}
-            className="w-1/3 py-3 border border-ctu-border hover:bg-gray-50 text-ctu-dark rounded-xl text-xs font-bold transition-colors"
+            className="w-1/3 py-4 border-2 border-gray-200 hover:bg-gray-50 active:scale-95 text-ctu-dark rounded-2xl text-xs font-black transition-all"
           >
-            Add More
+            + Add More Items
           </button>
           <button
             onClick={onProceedToCheckout}
-            className="w-2/3 py-3 bg-ctu-orange hover:bg-orange-600 active:scale-98 text-white rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 shadow-lg transition-all"
+            className="w-2/3 py-4 bg-ctu-orange hover:bg-orange-600 active:scale-95 text-white rounded-2xl text-sm font-black flex items-center justify-center gap-2 shadow-xl transition-all border-2 border-orange-400"
           >
             <span>Proceed to Checkout</span>
-            <ArrowRight size={17} />
+            <ArrowRight size={18} />
           </button>
         </div>
       </div>

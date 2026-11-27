@@ -1,13 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  Smartphone, 
-  Monitor, 
-  Wifi, 
-  Battery, 
   RotateCcw, 
   Sparkles,
-  ShieldCheck,
-  CreditCard
+  Database,
+  Store,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 
 import Header from './components/Header.jsx';
@@ -24,7 +22,15 @@ import RewardsScreen from './components/RewardsScreen.jsx';
 import TopUpModal from './components/TopUpModal.jsx';
 import ReceiptModal from './components/ReceiptModal.jsx';
 
-// Fallback initial products matching Figma and backend
+import { 
+  fetchSupabaseProducts, 
+  fetchSupabaseUserProfile, 
+  createSupabaseOrder, 
+  isSupabaseConfigured,
+  supabase 
+} from './supabase.js';
+
+// Default initial products matching Figma and backend
 const INITIAL_PRODUCTS = [
   {
     id: "ctu-tee-classic",
@@ -195,7 +201,7 @@ const INITIAL_ORDERS = [
     date: "Nov 25, 2026 · 02:15 PM",
     status: "Ready for Pickup",
     pickupLocation: "Campus Store Counter A",
-    kioskTerminal: "Kiosk Terminal #02 (Main Building)",
+    kioskTerminal: "Kiosk Terminal #01 (Main Building)",
     paymentMethod: "Campus Student Wallet",
     subtotal: 600.00,
     tax: 0.00,
@@ -277,25 +283,31 @@ export default function App() {
   const [insufficientData, setInsufficientData] = useState({ required: 0, current: 0 });
   const [selectedReceiptOrder, setSelectedReceiptOrder] = useState(null);
   const [lastCompletedOrder, setLastCompletedOrder] = useState(null);
+  const [dbSource, setDbSource] = useState('Local Store');
 
-  // Kiosk UI Display controls
-  const [isPhoneFrame, setIsPhoneFrame] = useState(true);
-  const [clockTime, setClockTime] = useState("");
-
-  // Update clock
+  // Load data: try Supabase first, then FastAPI proxy, then fallback
   useEffect(() => {
-    const updateTime = () => {
-      const now = new Date();
-      setClockTime(now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-    };
-    updateTime();
-    const interval = setInterval(updateTime, 30000);
-    return () => clearInterval(interval);
-  }, []);
+    const initializeData = async () => {
+      // 1. Try Supabase
+      if (isSupabaseConfigured) {
+        try {
+          const [sbProds, sbProfile] = await Promise.allSettled([
+            fetchSupabaseProducts(),
+            fetchSupabaseUserProfile()
+          ]);
+          if (sbProds.status === 'fulfilled' && sbProds.value && sbProds.value.length > 0) {
+            setProducts(sbProds.value);
+            setDbSource('Supabase (aograbohxutnakmcnrgm)');
+          }
+          if (sbProfile.status === 'fulfilled' && sbProfile.value) {
+            setUser(sbProfile.value);
+          }
+        } catch (err) {
+          console.warn('Supabase initialization fallback:', err);
+        }
+      }
 
-  // Fetch initial data from FastAPI backend if available
-  useEffect(() => {
-    const fetchBackendData = async () => {
+      // 2. Try FastAPI Backend
       try {
         const [prodRes, catRes, userRes, ordersRes, rewRes] = await Promise.allSettled([
           fetch('/api/products').then(r => r.ok ? r.json() : null),
@@ -307,6 +319,7 @@ export default function App() {
 
         if (prodRes.status === 'fulfilled' && prodRes.value && prodRes.value.length > 0) {
           setProducts(prodRes.value);
+          setDbSource('FastAPI + Local');
         }
         if (catRes.status === 'fulfilled' && catRes.value) {
           setCategories(catRes.value);
@@ -321,11 +334,11 @@ export default function App() {
           setRewards(rewRes.value.rewards);
         }
       } catch (err) {
-        console.warn("Backend API not reachable or using local state:", err);
+        console.warn('Backend proxy initialization:', err);
       }
     };
 
-    fetchBackendData();
+    initializeData();
   }, []);
 
   // Computed Cart metrics
@@ -342,10 +355,10 @@ export default function App() {
     return products.filter((p) => {
       const matchCat =
         selectedCategory === "All merchandise" ||
-        p.category.toLowerCase() === selectedCategory.toLowerCase();
+        p.category?.toLowerCase() === selectedCategory?.toLowerCase();
       const matchSearch =
         !searchQuery.trim() ||
-        p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        p.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         (p.description && p.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (p.tag && p.tag.toLowerCase().includes(searchQuery.toLowerCase()));
       return matchCat && matchSearch;
@@ -434,7 +447,6 @@ export default function App() {
       }
       setShowWalletConfirm(true);
     } else {
-      // Cash or GCash directly places the order
       finalizeOrder(paymentMethod);
     }
   };
@@ -445,6 +457,7 @@ export default function App() {
     const orderId = `CTU-ORD-${Math.floor(10000 + Math.random() * 90000)}`;
     const newOrder = {
       id: orderId,
+      user_id: user?.id,
       date: new Date().toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
@@ -462,6 +475,16 @@ export default function App() {
       items: [...cart]
     };
 
+    // 1. Try Supabase order insertion
+    if (isSupabaseConfigured) {
+      try {
+        await createSupabaseOrder(newOrder);
+      } catch (e) {
+        console.warn('Supabase order creation skipped:', e);
+      }
+    }
+
+    // 2. Try FastAPI Backend
     try {
       const res = await fetch('/api/orders', {
         method: 'POST',
@@ -492,7 +515,7 @@ export default function App() {
         return;
       }
     } catch {
-      // Offline / fallback path
+      // Offline fallback
     }
 
     // Local fallback update
@@ -553,60 +576,39 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-800 flex flex-col items-center justify-center p-0 sm:p-4 md:p-6 lg:p-8 font-sans selection:bg-ctu-orange selection:text-white">
+    <div className="min-h-screen w-full bg-[#111114] flex justify-center text-slate-800 font-sans selection:bg-ctu-orange selection:text-white">
       
-      {/* Kiosk Controls Top Bar (Desktop) */}
-      <div className="hidden sm:flex items-center justify-between w-full max-w-md mb-3 px-2 text-xs text-slate-400">
-        <div className="flex items-center gap-2">
-          <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
-          <span className="font-semibold text-slate-200">CTU Kiosk Active</span>
-          <span className="text-[11px] bg-slate-800 px-2 py-0.5 rounded text-orange-400 font-mono">
-            FastAPI + Vite
-          </span>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setIsPhoneFrame(!isPhoneFrame)}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
-            title="Toggle Phone Frame View"
-          >
-            {isPhoneFrame ? <Smartphone size={14} /> : <Monitor size={14} />}
-            <span>{isPhoneFrame ? "Phone View" : "Full View"}</span>
-          </button>
-
-          <button
-            onClick={handleResetKiosk}
-            className="p-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 transition-colors"
-            title="Reset Kiosk State"
-          >
-            <RotateCcw size={14} />
-          </button>
-        </div>
-      </div>
-
-      {/* Main Kiosk Container (Phone Dimensions Casing) */}
-      <div 
-        className={`w-full transition-all duration-300 flex flex-col bg-white overflow-hidden relative shadow-kiosk ${
-          isPhoneFrame
-            ? "max-w-[420px] h-[100dvh] sm:h-[860px] sm:max-h-[92vh] sm:rounded-[44px] sm:border-[10px] sm:border-slate-800"
-            : "max-w-2xl min-h-[90vh] sm:rounded-3xl"
-        }`}
-      >
-        {/* Phone Dynamic Island & Status Bar */}
-        <div className="bg-[#1f2937] text-white px-6 pt-3 pb-2 flex items-center justify-between text-xs select-none shrink-0 border-b border-gray-800">
-          <span className="font-semibold tracking-tight">{clockTime || "10:42 AM"}</span>
-
-          {/* Notch / Dynamic Island */}
-          <div className="w-24 h-4 bg-black rounded-full flex items-center justify-center gap-1 px-2">
-            <div className="w-2 h-2 rounded-full bg-gray-900 border border-gray-700"></div>
-            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500"></div>
+      {/* Full Page McDonald's Kiosk Column (Tall, Not Wide) */}
+      <div className="w-full max-w-2xl min-h-screen bg-ctu-bg flex flex-col relative shadow-2xl border-x border-stone-800/60">
+        
+        {/* Top Kiosk Station Info Bar */}
+        <div className="bg-[#18181b] text-white px-4 py-2 flex items-center justify-between text-xs select-none border-b border-stone-800">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+            <span className="font-extrabold text-[11px] text-orange-400 uppercase tracking-wider">
+              CTU Kiosk Terminal #01
+            </span>
+            <span className="text-gray-400 text-[10px] hidden sm:inline">
+              · Main Campus Ground Floor
+            </span>
           </div>
 
-          <div className="flex items-center gap-2 text-slate-300">
-            <span className="text-[10px] font-bold text-orange-400">CTU-5G</span>
-            <Wifi size={13} />
-            <Battery size={15} className="text-emerald-400" />
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 text-gray-300 text-[11px]">
+              <Database size={12} className="text-amber-400" />
+              <span className="font-mono text-[10px] text-gray-400">
+                {isSupabaseConfigured ? "Supabase Connected" : "Supabase: aograbohxutnakmcnrgm"}
+              </span>
+            </div>
+
+            <button
+              onClick={handleResetKiosk}
+              className="p-1 rounded bg-stone-800 hover:bg-stone-700 text-gray-300 text-[10px] font-bold transition-all active:scale-95 flex items-center gap-1"
+              title="Reset Kiosk State"
+            >
+              <RotateCcw size={12} />
+              <span className="hidden xs:inline">Reset</span>
+            </button>
           </div>
         </div>
 
@@ -618,10 +620,11 @@ export default function App() {
           cartTotal={cartTotal}
           user={user}
           onOpenTopUp={() => setShowTopUp(true)}
+          onResetOrder={handleResetKiosk}
         />
 
-        {/* Main Content Viewport */}
-        <div className="flex-1 overflow-y-auto relative bg-ctu-bg">
+        {/* Main Content Area */}
+        <div className="flex-1 overflow-y-auto relative bg-ctu-bg flex flex-col">
           {currentScreen === 'welcome' && (
             <WelcomeScreen
               onStartShopping={() => setCurrentScreen('catalog')}
@@ -644,6 +647,7 @@ export default function App() {
               cartCount={cartCount}
               cartTotal={cartTotal}
               onViewCart={() => setCurrentScreen('cart')}
+              onResetOrder={handleResetKiosk}
             />
           )}
 
@@ -695,13 +699,6 @@ export default function App() {
           )}
         </div>
 
-        {/* Home Indicator Bar (Mobile Dimensions) */}
-        {isPhoneFrame && (
-          <div className="py-2 flex items-center justify-center bg-white border-t border-gray-100 shrink-0">
-            <div className="w-32 h-1 bg-gray-400 rounded-full cursor-pointer hover:bg-gray-600 transition-colors" onClick={() => setCurrentScreen('welcome')} />
-          </div>
-        )}
-
         {/* Global Modals */}
         {selectedProduct && (
           <ProductDetailModal
@@ -752,11 +749,6 @@ export default function App() {
             onClose={() => setSelectedReceiptOrder(null)}
           />
         )}
-      </div>
-
-      {/* Kiosk Bottom Device Label */}
-      <div className="mt-3 text-center text-slate-500 text-[11px] hidden sm:block">
-        <p>Cebu Technological University · Official Self-Service Merch Kiosk Terminal</p>
       </div>
     </div>
   );

@@ -169,14 +169,14 @@ export default function CheckoutScreen({
         </div>
       </div>
 
-      {/* Bottom Action Bar */}
-      <div className="fixed bottom-0 left-0 right-0 max-w-md mx-auto p-4 bg-white border-t border-ctu-border shadow-2xl z-40">
+      {/* Bottom Action Bar (McDonald's Kiosk Style) */}
+      <div className="fixed bottom-0 left-0 right-0 max-w-2xl mx-auto p-4 bg-white border-t-2 border-ctu-border shadow-2xl z-40">
         <button
           onClick={() => onConfirmOrder(paymentMethod)}
-          className="w-full py-3.5 bg-ctu-orange hover:bg-orange-600 active:scale-98 text-white rounded-xl text-xs font-extrabold flex items-center justify-center gap-2 shadow-lg transition-all"
+          className="w-full py-4 bg-ctu-orange hover:bg-orange-600 active:scale-95 text-white rounded-2xl text-sm font-black flex items-center justify-center gap-2.5 shadow-xl transition-all border-2 border-orange-400"
         >
           <span>Confirm & Pay ₱{subtotal.toFixed(2)}</span>
-          <ArrowRight size={17} />
+          <ArrowRight size={19} />
         </button>
       </div>
     </div>
