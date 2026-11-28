@@ -1,13 +1,15 @@
 import React from 'react';
-import { Trash2, Minus, Plus, ArrowRight, ShoppingBag, ArrowLeft } from 'lucide-react';
+import { Trash2, Minus, Plus, ArrowRight, ShoppingBag, LogIn } from 'lucide-react';
 
 export default function CartScreen({
   cart,
+  user,
   onUpdateQuantity,
   onRemoveItem,
   onClearCart,
   onProceedToCheckout,
-  onContinueShopping
+  onContinueShopping,
+  onOpenLogin
 }) {
   const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
@@ -136,13 +138,25 @@ export default function CartScreen({
             >
               + Add More Items
             </button>
-            <button
-              onClick={onProceedToCheckout}
-              className="flex-1 sm:flex-none px-8 py-4 bg-ctu-orange hover:bg-orange-600 active:scale-95 text-white rounded-2xl text-sm font-black flex items-center justify-center gap-2 shadow-xl transition-all border-2 border-orange-400"
-            >
-              <span>Proceed to Checkout</span>
-              <ArrowRight size={18} />
-            </button>
+
+            {user?.isGuest ? (
+              /* Guest: prompt to log in before checkout */
+              <button
+                onClick={onOpenLogin}
+                className="flex-1 sm:flex-none px-8 py-4 bg-ctu-orange hover:bg-orange-600 active:scale-95 text-white rounded-2xl text-sm font-black flex items-center justify-center gap-2 shadow-xl transition-all border-2 border-orange-400"
+              >
+                <LogIn size={18} />
+                <span>Log In to Checkout</span>
+              </button>
+            ) : (
+              <button
+                onClick={onProceedToCheckout}
+                className="flex-1 sm:flex-none px-8 py-4 bg-ctu-orange hover:bg-orange-600 active:scale-95 text-white rounded-2xl text-sm font-black flex items-center justify-center gap-2 shadow-xl transition-all border-2 border-orange-400"
+              >
+                <span>Proceed to Checkout</span>
+                <ArrowRight size={18} />
+              </button>
+            )}
           </div>
 
         </div>

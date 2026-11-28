@@ -1,12 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  RotateCcw, 
-  Sparkles,
-  Database,
-  Store,
-  CheckCircle2,
-  AlertCircle
-} from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 
 import Header from './components/Header.jsx';
 import WelcomeScreen from './components/WelcomeScreen.jsx';
@@ -25,9 +17,11 @@ import LoginModal from './components/LoginModal.jsx';
 
 import { 
   fetchSupabaseProducts, 
-  fetchSupabaseUserProfile, 
+  fetchProfileByAuthId,
   createSupabaseOrder, 
-  isSupabaseConfigured 
+  isSupabaseConfigured,
+  onAuthStateChange,
+  signOut
 } from './supabase.js';
 
 // Default initial products matching Figma and backend
@@ -185,15 +179,17 @@ const INITIAL_PRODUCTS = [
   }
 ];
 
-const INITIAL_USER = {
-  id: "CTU-2024-08219",
-  name: "Dominic Magalso",
-  role: "Student",
-  department: "College of Computer, Information and Communications Technology",
-  campus: "Main Campus",
-  balance: 1250.00,
-  points: 450,
-  isGuest: false
+// Guest user — the default starting state
+const GUEST_USER = {
+  id: null,
+  name: 'Guest',
+  role: 'Guest',
+  department: '',
+  campus: 'Main Campus',
+  balance: 0,
+  points: 0,
+  isGuest: true,
+  email: null
 };
 
 const INITIAL_ORDERS = [
@@ -271,7 +267,8 @@ export default function App() {
   const [categories, setCategories] = useState(["All merchandise", "Apparel", "Accessories", "Drinkware"]);
   const [selectedCategory, setSelectedCategory] = useState("All merchandise");
   const [searchQuery, setSearchQuery] = useState("");
-  const [user, setUser] = useState(INITIAL_USER);
+  // Always start as guest
+  const [user, setUser] = useState(GUEST_USER);
   const [cart, setCart] = useState([]);
   const [orders, setOrders] = useState(INITIAL_ORDERS);
   const [rewards, setRewards] = useState(INITIAL_REWARDS);
@@ -286,57 +283,72 @@ export default function App() {
   const [selectedReceiptOrder, setSelectedReceiptOrder] = useState(null);
   const [lastCompletedOrder, setLastCompletedOrder] = useState(null);
 
-  // Load data: try Supabase first, then FastAPI proxy, then fallback
+  // ── Auth state listener ───────────────────────────────────────────────────
+  useEffect(() => {
+    const unsubscribe = onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user) {
+        // Fetch real profile from DB
+        const profile = await fetchProfileByAuthId(session.user.id);
+        if (profile) {
+          setUser({
+            id: profile.student_id || session.user.id,
+            name: profile.full_name || session.user.email,
+            email: session.user.email,
+            role: profile.role || 'Student',
+            department: profile.department || '',
+            campus: profile.campus || 'Main Campus',
+            balance: profile.balance || 0,
+            points: profile.points || 0,
+            isGuest: false
+          });
+        } else {
+          // Profile not yet in DB — use auth info as fallback
+          setUser({
+            id: session.user.id,
+            name: session.user.user_metadata?.full_name || session.user.email,
+            email: session.user.email,
+            role: 'Student',
+            department: '',
+            campus: 'Main Campus',
+            balance: 0,
+            points: 0,
+            isGuest: false
+          });
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setUser(GUEST_USER);
+      }
+    });
+    return unsubscribe;
+  }, []);
+
+  // Load products from Supabase on mount
   useEffect(() => {
     const initializeData = async () => {
-      // 1. Try Supabase
       if (isSupabaseConfigured) {
         try {
-          const [sbProds, sbProfile] = await Promise.allSettled([
-            fetchSupabaseProducts(),
-            fetchSupabaseUserProfile()
-          ]);
-          if (sbProds.status === 'fulfilled' && sbProds.value && sbProds.value.length > 0) {
-            setProducts(sbProds.value);
-          }
-          if (sbProfile.status === 'fulfilled' && sbProfile.value) {
-            setUser((prev) => ({ ...prev, ...sbProfile.value }));
-          }
+          const sbProds = await fetchSupabaseProducts();
+          if (sbProds && sbProds.length > 0) setProducts(sbProds);
         } catch (err) {
-          console.warn('Supabase initialization fallback:', err);
+          console.warn('Supabase product fetch fallback:', err);
         }
       }
-
-      // 2. Try FastAPI Backend
+      // FastAPI proxy fallback
       try {
-        const [prodRes, catRes, userRes, ordersRes, rewRes] = await Promise.allSettled([
+        const [prodRes, catRes, ordersRes, rewRes] = await Promise.allSettled([
           fetch('/api/products').then(r => r.ok ? r.json() : null),
           fetch('/api/categories').then(r => r.ok ? r.json() : null),
-          fetch('/api/user').then(r => r.ok ? r.json() : null),
           fetch('/api/orders').then(r => r.ok ? r.json() : null),
           fetch('/api/rewards').then(r => r.ok ? r.json() : null),
         ]);
-
-        if (prodRes.status === 'fulfilled' && prodRes.value && prodRes.value.length > 0) {
-          setProducts(prodRes.value);
-        }
-        if (catRes.status === 'fulfilled' && catRes.value) {
-          setCategories(catRes.value);
-        }
-        if (userRes.status === 'fulfilled' && userRes.value) {
-          setUser((prev) => ({ ...prev, ...userRes.value }));
-        }
-        if (ordersRes.status === 'fulfilled' && ordersRes.value) {
-          setOrders(ordersRes.value);
-        }
-        if (rewRes.status === 'fulfilled' && rewRes.value?.rewards) {
-          setRewards(rewRes.value.rewards);
-        }
+        if (prodRes.status === 'fulfilled' && prodRes.value?.length > 0) setProducts(prodRes.value);
+        if (catRes.status === 'fulfilled' && catRes.value) setCategories(catRes.value);
+        if (ordersRes.status === 'fulfilled' && ordersRes.value) setOrders(ordersRes.value);
+        if (rewRes.status === 'fulfilled' && rewRes.value?.rewards) setRewards(rewRes.value.rewards);
       } catch (err) {
         console.warn('Backend proxy initialization:', err);
       }
     };
-
     initializeData();
   }, []);
 
@@ -433,22 +445,30 @@ export default function App() {
     setUser((prev) => ({ ...prev, balance: prev.balance + amount }));
   };
 
-  // Login & Guest handling
-  const handleLogin = (loginInfo) => {
-    setUser((prev) => ({
-      ...prev,
-      id: loginInfo.id,
-      name: loginInfo.name,
-      role: loginInfo.role,
-      isGuest: false
-    }));
+  // ── Auth helpers ──────────────────────────────────────────────────────────
+  // Opens login modal if the user is a guest; returns false to block action
+  const requireAuth = useCallback(() => {
+    if (user.isGuest) {
+      setShowLoginModal(true);
+      return false;
+    }
+    return true;
+  }, [user.isGuest]);
+
+  // Called by LoginModal after Supabase resolves (profile loaded via listener)
+  const handleLogin = (_supabaseUser) => {
+    // Profile is loaded by the onAuthStateChange listener — nothing extra needed
   };
 
   const handleContinueAsGuest = () => {
-    setUser((prev) => ({
-      ...prev,
-      isGuest: true
-    }));
+    setUser(GUEST_USER);
+  };
+
+  const handleLogout = async () => {
+    await signOut();
+    setUser(GUEST_USER);
+    setCart([]);
+    setCurrentScreen('welcome');
   };
 
   // Checkout flow
@@ -559,8 +579,9 @@ export default function App() {
     setCurrentScreen('success');
   };
 
-  // Rewards redemption
+  // Rewards redemption (requires auth)
   const handleRedeemReward = async (reward) => {
+    if (!requireAuth()) return null;
     try {
       const res = await fetch('/api/rewards/redeem', {
         method: 'POST',
@@ -585,10 +606,10 @@ export default function App() {
     return null;
   };
 
-  // Reset Demo kiosk data
+  // Reset kiosk
   const handleResetKiosk = () => {
     setCart([]);
-    setUser(INITIAL_USER);
+    setUser(GUEST_USER);
     setCurrentScreen('welcome');
     setSelectedProduct(null);
     setShowTopUp(false);
@@ -600,25 +621,26 @@ export default function App() {
   return (
     <div className="min-h-screen w-full bg-ctu-bg text-slate-800 font-sans selection:bg-ctu-orange selection:text-white flex flex-col">
       
-      {/* Global Kiosk Header (Store Navigation Figma 10:2626 & 10:2875) */}
+      {/* Global Kiosk Header */}
       <Header
         currentScreen={currentScreen}
         onNavigate={setCurrentScreen}
         cartCount={cartCount}
         cartTotal={cartTotal}
         user={user}
-        onOpenTopUp={() => setShowTopUp(true)}
+        onOpenTopUp={() => requireAuth() && setShowTopUp(true)}
         onOpenLogin={() => setShowLoginModal(true)}
+        onLogout={handleLogout}
       />
 
-      {/* Main Content Area (Dynamic Responsive Width, Full Length) */}
+      {/* Main Content Area */}
       <main className="flex-1 flex flex-col w-full">
         {currentScreen === 'welcome' && (
           <WelcomeScreen
             onStartShopping={() => setCurrentScreen('catalog')}
             onNavigate={setCurrentScreen}
             user={user}
-            onOpenTopUp={() => setShowTopUp(true)}
+            onOpenTopUp={() => requireAuth() && setShowTopUp(true)}
             onOpenLogin={() => setShowLoginModal(true)}
           />
         )}
@@ -645,11 +667,16 @@ export default function App() {
         {currentScreen === 'cart' && (
           <CartScreen
             cart={cart}
+            user={user}
             onUpdateQuantity={handleUpdateQuantity}
             onRemoveItem={handleRemoveItem}
             onClearCart={handleClearCart}
-            onProceedToCheckout={() => setCurrentScreen('checkout')}
+            onProceedToCheckout={() => {
+              if (!requireAuth()) return;
+              setCurrentScreen('checkout');
+            }}
             onContinueShopping={() => setCurrentScreen('catalog')}
+            onOpenLogin={() => setShowLoginModal(true)}
           />
         )}
 
@@ -684,8 +711,9 @@ export default function App() {
             user={user}
             rewards={rewards}
             onRedeemReward={handleRedeemReward}
-            onOpenTopUp={() => setShowTopUp(true)}
+            onOpenTopUp={() => requireAuth() && setShowTopUp(true)}
             onBackToCatalog={() => setCurrentScreen('catalog')}
+            onOpenLogin={() => setShowLoginModal(true)}
           />
         )}
       </main>
@@ -697,7 +725,6 @@ export default function App() {
           onClose={() => setShowLoginModal(false)}
           onLogin={handleLogin}
           onContinueAsGuest={handleContinueAsGuest}
-          currentUser={user}
         />
       )}
 
